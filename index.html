@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>관리비 분석기 | LIT A&D</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #F0F4F8;
+      font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #1B2B4B;
+      min-height: 100vh;
+    }
+    a { color: inherit; }
+
+    /* Header */
+    .header {
+      background: #1B2B4B;
+      color: #fff;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-icon {
+      width: 38px; height: 38px; border-radius: 9px;
+      background: linear-gradient(135deg, #3B82F6, #60B8FF);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .header h1 { font-size: 18px; font-weight: 600; }
+    .header p { font-size: 12px; opacity: 0.65; margin-top: 2px; }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .month-badge {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: #fff; font-size: 12px;
+      padding: 4px 12px; border-radius: 20px;
+    }
+
+    /* Layout */
+    .container { max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 2px dashed #BCC7D8;
+      border-radius: 14px;
+      background: #fff;
+      text-align: center;
+      cursor: pointer;
+      padding: 48px 24px;
+      transition: border-color 0.15s, background 0.15s;
+      margin-bottom: 20px;
+      user-select: none;
+    }
+    .upload-zone.compact { padding: 16px 24px; }
+    .upload-zone.dragging { border-color: #3B82F6; background: #EFF6FF; }
+    .upload-zone:hover { border-color: #93AECB; }
+    .upload-icon { font-size: 44px; margin-bottom: 10px; }
+    .upload-title { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+    .upload-sub { font-size: 13px; color: #6B7280; margin-bottom: 18px; }
+    .upload-status { font-size: 14px; color: #3B82F6; }
+    .upload-compact-msg { font-size: 13px; color: #6B7280; }
+    #file-input { display: none; }
+
+    /* Button */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #1B2B4B; color: #fff;
+      border: none; border-radius: 8px;
+      padding: 10px 22px; font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .btn:hover { background: #2D4A7A; }
+    .btn-ghost {
+      background: transparent; color: #6B7280;
+      border: 1px solid #D1D5DB; border-radius: 6px;
+      padding: 4px 12px; font-size: 12px; cursor: pointer;
+    }
+    .btn-ghost:hover { background: #F3F4F6; }
+
+    /* Error */
+    .error-msg {
+      display: none;
+      background: #FEF2F2; border: 1px solid #FECACA;
+      border-radius: 8px; padding: 10px 14px;
+      color: #DC2626; font-size: 13px; margin-bottom: 16px;
+    }
+
+    /* Top bar */
+    .top-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px;
+    }
+    .top-bar p { font-size: 13px; color: #6B7280; }
+
+    /* Summary cards */
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .metric-card {
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      border-radius: 10px;
+      padding: 13px 14px;
+    }
+    .metric-label { font-size: 11px; color: #6B7280; font-weight: 500; margin-bottom: 4px; }
+    .metric-value { font-size: 17px; font-weight: 600; }
+    .metric-sub { font-size: 11px; color: #DC2626; margin-top: 3px; }
+
+    /* Table card */
+    .table-card {
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .card-header {
+      padding: 13px 16px;
+      border-bottom: 1px solid #F1F5F9;
+    }
+    .card-header h2 { font-size: 14px; font-weight: 600; }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead tr { background: #F8F9FC; }
+    th {
+      padding: 9px 14px; text-align: left;
+      font-weight: 500; color: #6B7280; white-space: nowrap;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    th:not(:first-child) { text-align: right; }
+    td { padding: 8px 14px; border-bottom: 1px solid #F1F5F9; white-space: nowrap; }
+    tr.even td { background: #FAFBFF; }
+    tr.total-row td {
+      border-top: 1px solid #D1D5DB;
+      font-weight: 600;
+      background: #F8F9FC;
+    }
+    .item-name { display: flex; align-items: center; gap: 7px; }
+    .var-dot {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #E24B4A;
+      flex-shrink: 0;
+    }
+    .no-dot { display: inline-block; width: 6px; flex-shrink: 0; }
+    .table-footer {
+      padding: 8px 16px;
+      border-top: 1px solid #F1F5F9;
+      font-size: 11px; color: #9CA3AF;
+      display: flex; align-items: center; gap: 5px;
+    }
+
+    /* Charts */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .chart-card {
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      border-radius: 14px;
+      padding: 16px 16px 12px;
+    }
+    .chart-card.wide { grid-column: span 2; }
+    @media (max-width: 620px) {
+      .chart-card.wide { grid-column: span 1; }
+    }
+    .chart-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+    .chart-sub { font-size: 11px; color: #9CA3AF; margin-bottom: 14px; }
+    .chart-legend {
+      display: flex; flex-wrap: wrap;
+      gap: 4px 12px; margin-bottom: 12px;
+    }
+    .legend-item {
+      display: flex; align-items: center;
+      gap: 5px; font-size: 11px; color: #6B7280;
+    }
+    .legend-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      display: inline-block; flex-shrink: 0;
+    }
+    .legend-dot.sq { border-radius: 2px; }
+
+    #results { display: none; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-icon">🏠</div>
+  <div>
+    <h1>관리비 분석기</h1>
+    <p>아파트 관리비 고지서 PDF 자동 분석</p>
+  </div>
+  <div class="header-right" id="header-right" style="display:none">
+    <span class="month-badge" id="month-badge"></span>
+    <button class="btn-ghost" onclick="reset()" style="color:#fff; border-color:rgba(255,255,255,0.3)">초기화</button>
+  </div>
+</header>
+
+<div class="container">
+  <!-- Upload -->
+  <div class="upload-zone" id="upload-zone">
+    <input type="file" id="file-input" multiple accept=".pdf" />
+    <div id="upload-default">
+      <div class="upload-icon">📄</div>
+      <p class="upload-title">관리비 고지서 PDF를 업로드하세요</p>
+      <p class="upload-sub">여러 달 PDF를 한꺼번에 드래그하거나 파일 선택으로 업로드할 수 있습니다</p>
+      <button class="btn" onclick="event.stopPropagation(); document.getElementById('file-input').click()">파일 선택</button>
+    </div>
+    <div id="upload-compact" style="display:none">
+      <p class="upload-compact-msg">📎 추가 PDF를 드래그하거나 클릭하여 업로드</p>
+    </div>
+    <p class="upload-status" id="upload-status"></p>
+  </div>
+
+  <div class="error-msg" id="error-msg"></div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="top-bar">
+      <p id="month-count"></p>
+    </div>
+    <div class="summary-cards" id="summary-cards"></div>
+    <div id="table-container"></div>
+    <div id="charts-container"></div>
+  </div>
+</div>
+
+<script>
+  // ── Setup PDF.js ───────────────────────────────────────────────
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  // ── Constants ─────────────────────────────────────────────────
+  const ITEM_DEFS = [
+    { key: '일반관리비', variable: false },
+    { key: '청소비',     variable: false },
+    { key: '경비비',     variable: false },
+    { key: '소독비',     variable: false },
+    { key: '승강기유지비', variable: false },
+    { key: '수선유지비', variable: true  },
+    { key: '공동전기료', variable: true  },
+    { key: '세대수도료', variable: true  },
+    { key: '난방비',     variable: true  },
+    { key: '장기수선충당금', variable: false },
+    { key: '생활폐기물수수료', variable: false },
+    { key: 'TV수신료',   variable: false },
+    { key: '주차비',     variable: true  },
+    { key: '연체료',     variable: true  },
+  ];
+
+  const VAR_KEYS   = ['난방비','공동전기료','세대수도료','수선유지비','주차비'];
+  const VAR_COLORS = ['#E24B4A','#EF9F27','#378ADD','#7F77DD','#1D9E75'];
+  const TOP_KEYS   = ['일반관리비','경비비','난방비','장기수선충당금','수선유지비','공동전기료'];
+  const TOP_COLORS = ['#0C447C','#185FA5','#E24B4A','#1D9E75','#7F77DD','#EF9F27'];
+
+  let months = [];
+  let charts = {};
+
+  const fmt = n => (n != null && !isNaN(n)) ? n.toLocaleString('ko-KR') : '-';
+
+  // ── Parser ────────────────────────────────────────────────────
+  function parseManagementFee(rawText) {
+    let text = rawText
+      .replace(/합\s+계/g, '합계')
+      .replace(/TV\s*수신료/g, 'TV수신료')
+      .replace(/장기\s*수선\s*충당금/g, '장기수선충당금')
+      .replace(/생활\s*폐기물\s*수수료/g, '생활폐기물수수료')
+      .replace(/승강기\s*유지비/g, '승강기유지비')
+      .replace(/수선\s*유지비/g, '수선유지비');
+    const t = text.replace(/[ \t]+/g, ' ');
+
+    const mm = t.match(/(\d{4})\s*년\s*(\d{1,2})\s*월/);
+    if (!mm) return null;
+
+    const year = parseInt(mm[1]), month = parseInt(mm[2]);
+    const data = {
+      monthKey: `${year}.${String(month).padStart(2,'0')}`,
+      label: `${month}월`
+    };
+
+    [...ITEM_DEFS.map(d => d.key), '합계'].forEach(key => {
+      const esc = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const m = t.match(new RegExp(esc + '\\s+([\\d,]+)'));
+      data[key] = m ? parseInt(m[1].replace(/,/g, ''), 10) : 0;
+    });
+    return data;
+  }
+
+  // ── File processing ───────────────────────────────────────────
+  async function processFiles(files) {
+    const pdfs = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+    if (!pdfs.length) return;
+    setLoading(true); setError('');
+
+    const found = [];
+    for (const file of pdfs) {
+      try {
+        const ab = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const text = content.items.map(it => it.str).join(' ');
+          const parsed = parseManagementFee(text);
+          if (parsed) found.push(parsed);
+        }
+      } catch(e) { setError(`오류: ${file.name} 처리 실패`); }
+    }
+
+    if (!found.length && pdfs.length)
+      setError('관리비 고지서 형식을 인식하지 못했습니다. 올바른 PDF를 업로드해주세요.');
+
+    const merged = [...months, ...found];
+    const unique = Array.from(new Map(merged.map(m => [m.monthKey, m])).values());
+    unique.sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+    months = unique;
+
+    setLoading(false);
+    renderAll();
+  }
+
+  // ── Render ────────────────────────────────────────────────────
+  function renderAll() {
+    if (!months.length) {
+      document.getElementById('results').style.display = 'none';
+      document.getElementById('upload-zone').className = 'upload-zone';
+      document.getElementById('upload-default').style.display = '';
+      document.getElementById('upload-compact').style.display = 'none';
+      document.getElementById('header-right').style.display = 'none';
+      return;
+    }
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('upload-zone').className = 'upload-zone compact';
+    document.getElementById('upload-default').style.display = 'none';
+    document.getElementById('upload-compact').style.display = '';
+    document.getElementById('header-right').style.display = 'flex';
+    document.getElementById('month-badge').textContent = `${months.length}개월`;
+    document.getElementById('month-count').textContent = `${months.length}개월 데이터 로드됨`;
+
+    renderSummaryCards();
+    renderTable();
+    renderCharts();
+  }
+
+  function renderSummaryCards() {
+    document.getElementById('summary-cards').innerHTML = months.map(m => `
+      <div class="metric-card">
+        <p class="metric-label">${m.monthKey}</p>
+        <p class="metric-value">${fmt(m['합계'])}원</p>
+        ${m['연체료'] > 0 ? `<p class="metric-sub">연체료 ${fmt(m['연체료'])}원</p>` : ''}
+      </div>
+    `).join('');
+  }
+
+  function renderTable() {
+    const headers = months.map(m => `<th>${m.label}</th>`).join('');
+    const rows = ITEM_DEFS.map((item, idx) => {
+      const maxVal = item.variable ? Math.max(...months.map(x => x[item.key] || 0)) : 0;
+      const cells = months.map(m => {
+        const val = m[item.key] || 0;
+        const isMax = item.variable && months.length > 1 && val === maxVal && val > 0;
+        return `<td style="text-align:right${isMax ? ';color:#E24B4A;font-weight:600' : ''}">${fmt(val)}</td>`;
+      }).join('');
+      return `<tr class="${idx%2===1?'even':''}">
+        <td>
+          <span class="item-name">
+            ${item.variable ? '<span class="var-dot"></span>' : '<span class="no-dot"></span>'}
+            <span style="${item.variable ? 'font-weight:500' : 'color:#6B7280'}">${item.key}</span>
+          </span>
+        </td>${cells}
+      </tr>`;
+    }).join('');
+
+    const totalCells = months.map(m =>
+      `<td style="text-align:right">${fmt(m['합계'])}</td>`
+    ).join('');
+
+    document.getElementById('table-container').innerHTML = `
+      <div class="table-card">
+        <div class="card-header"><h2>월별 항목 비교표</h2></div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>항목</th>${headers}</tr></thead>
+            <tbody>
+              ${rows}
+              <tr class="total-row">
+                <td><span style="padding-left:13px">합계</span></td>
+                ${totalCells}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span class="var-dot"></span>
+          빨간 점: 변동 항목 &nbsp;·&nbsp; 빨간 숫자: 해당 기간 최고값
+        </div>
+      </div>`;
+  }
+
+  function renderCharts() {
+    Object.values(charts).forEach(c => c.destroy());
+    charts = {};
+
+    const labels = months.map(m => m.label);
+
+    const varLegend = VAR_KEYS.map((k,i) =>
+      `<span class="legend-item"><span class="legend-dot" style="background:${VAR_COLORS[i]}"></span>${k}</span>`
+    ).join('');
+    const topLegend = TOP_KEYS.map((k,i) =>
+      `<span class="legend-item"><span class="legend-dot sq" style="background:${TOP_COLORS[i]}"></span>${k}</span>`
+    ).join('');
+
+    document.getElementById('charts-container').innerHTML = `
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>월별 합계 추이</h3>
+          <p class="chart-sub">단위: 원</p>
+          <div style="position:relative;height:200px"><canvas id="c-total" role="img" aria-label="월별 합계 추이 막대 그래프"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>변동 항목 비교</h3>
+          <div class="chart-legend">${varLegend}</div>
+          <div style="position:relative;height:200px"><canvas id="c-var" role="img" aria-label="변동 항목 비교 선 그래프"></canvas></div>
+        </div>
+        <div class="chart-card wide">
+          <h3>주요 항목별 금액 비교</h3>
+          <div class="chart-legend">${topLegend}</div>
+          <div style="position:relative;height:220px"><canvas id="c-top" role="img" aria-label="주요 항목별 금액 비교 막대 그래프"></canvas></div>
+        </div>
+      </div>`;
+
+    const baseOpts = {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font:{size:12}, color:'#6B7280' },
+             border: { display: false } },
+        y: { grid: { color:'#F1F5F9' }, border: { display: false },
+             ticks: { font:{size:11}, color:'#6B7280',
+               callback: v => `${Math.round(v/10000)}만` } }
+      }
+    };
+    const ttCb = { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}원` } };
+
+    // Chart 1 — total
+    charts.total = new Chart(document.getElementById('c-total'), {
+      type: 'bar',
+      data: { labels, datasets: [{
+        label: '합계', data: months.map(m => m['합계']||0),
+        backgroundColor: '#0C447C', borderRadius: 4,
+      }]},
+      options: { ...baseOpts, plugins: { legend:{display:false}, tooltip: ttCb } }
+    });
+
+    // Chart 2 — variable lines
+    charts.var = new Chart(document.getElementById('c-var'), {
+      type: 'line',
+      data: { labels, datasets: VAR_KEYS.map((key, i) => ({
+        label: key, data: months.map(m => m[key]||0),
+        borderColor: VAR_COLORS[i], backgroundColor: VAR_COLORS[i],
+        borderWidth: 1.5, pointRadius: 3, pointHoverRadius: 5, tension: 0.1,
+      }))},
+      options: { ...baseOpts, plugins: { legend:{display:false}, tooltip: ttCb } }
+    });
+
+    // Chart 3 — grouped bar
+    charts.top = new Chart(document.getElementById('c-top'), {
+      type: 'bar',
+      data: { labels, datasets: TOP_KEYS.map((key, i) => ({
+        label: key, data: months.map(m => m[key]||0),
+        backgroundColor: TOP_COLORS[i], borderRadius: 2,
+      }))},
+      options: { ...baseOpts, plugins: { legend:{display:false}, tooltip: ttCb } }
+    });
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────
+  function setLoading(on) {
+    document.getElementById('upload-status').textContent = on ? 'PDF 분석 중...' : '';
+  }
+  function setError(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = msg;
+    el.style.display = msg ? 'block' : 'none';
+  }
+  function reset() {
+    months = [];
+    Object.values(charts).forEach(c => c.destroy());
+    charts = {};
+    ['summary-cards','table-container','charts-container'].forEach(id => {
+      document.getElementById(id).innerHTML = '';
+    });
+    setError('');
+    document.getElementById('file-input').value = '';
+    renderAll();
+  }
+
+  // ── Events ────────────────────────────────────────────────────
+  const zone = document.getElementById('upload-zone');
+  const input = document.getElementById('file-input');
+
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('dragging'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragging'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('dragging');
+    processFiles(e.dataTransfer.files);
+  });
+  zone.addEventListener('click', () => input.click());
+  input.addEventListener('change', e => processFiles(e.target.files));
+</script>
+</body>
+</html>
